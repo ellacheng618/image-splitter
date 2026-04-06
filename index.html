@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>圖片分割工具</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg: #0f0f11;
+    --surface: #18181c;
+    --surface2: #22222a;
+    --border: #2e2e38;
+    --accent: #ff6b35;
+    --accent2: #ffb347;
+    --text: #f0efe8;
+    --muted: #7a7a8a;
+    --success: #4ade80;
+    --warn: #facc15;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,107,53,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,107,53,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* Header */
+  header {
+    margin-bottom: 48px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,107,53,.12);
+    border: 1px solid rgba(255,107,53,.3);
+    border-radius: 100px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: clamp(28px, 5vw, 42px);
+    font-weight: 700;
+    line-height: 1.15;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .subtitle {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.6;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 20px;
+    transition: border-color .2s;
+  }
+  .card:hover { border-color: #3e3e4e; }
+
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(255,107,53,.04);
+  }
+  .drop-zone input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+  .drop-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+    display: block;
+  }
+  .drop-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .drop-sub {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* File list */
+  .file-list {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .file-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+  }
+  .file-item .fi-name { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-item .fi-size { color: var(--muted); flex-shrink: 0; }
+  .file-item .fi-remove {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 14px; padding: 0 4px;
+    transition: color .15s;
+  }
+  .file-item .fi-remove:hover { color: #ff4444; }
+
+  /* Settings */
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 560px) { .settings-grid { grid-template-columns: 1fr; } }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field .hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+  /* Range slider */
+  .field input[type=range] {
+    padding: 0;
+    height: 4px;
+    accent-color: var(--accent);
+    background: var(--border);
+    border: none;
+    cursor: pointer;
+  }
+  .range-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .range-row input[type=range] { flex: 1; }
+  .range-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    min-width: 40px;
+    text-align: right;
+  }
+
+  /* Info box */
+  .info-box {
+    background: rgba(255,107,53,.07);
+    border: 1px solid rgba(255,107,53,.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: var(--accent2);
+    line-height: 1.6;
+    margin-top: 12px;
+  }
+  .info-box strong { color: var(--accent); }
+
+  /* Run button */
+  .btn-run {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: var(--radius);
+    color: #0f0f11;
+    font-family: 'Sora', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    margin-top: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-run:hover { opacity: .9; }
+  .btn-run:active { transform: scale(.985); }
+  .btn-run:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Progress */
+  .progress-wrap {
+    display: none;
+    margin-top: 20px;
+  }
+  .progress-wrap.show { display: block; }
+  .progress-bar-track {
+    background: var(--surface2);
+    border-radius: 100px;
+    height: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 100px;
+    width: 0%;
+    transition: width .3s ease;
+  }
+  .progress-log {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    max-height: 120px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .log-line { animation: fadeIn .2s ease; }
+  .log-line.ok { color: var(--success); }
+  .log-line.warn { color: var(--warn); }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: none; } }
+
+  /* Results */
+  .results {
+    display: none;
+    margin-top: 20px;
+  }
+  .results.show { display: block; }
+  .result-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .result-item .ri-name { flex: 1; }
+  .result-item .ri-info { color: var(--muted); }
+  .ri-ok { color: var(--success); }
+  .ri-warn { color: var(--warn); }
+
+  .btn-dl {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px;
+    background: var(--surface2);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    color: var(--accent);
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .2s;
+    margin-top: 12px;
+  }
+  .btn-dl:hover { background: rgba(255,107,53,.1); }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    margin-top: 60px;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: .05em;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="badge">⚡ OTA 上架工具</div>
+    <h1>商品圖片<br>自動分割器</h1>
+    <p class="subtitle">上傳長圖，自動偵測內容區塊邊界，分割成符合平台規格的多張圖片並打包下載。</p>
+  </header>
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-title">01 上傳圖片</div>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp" multiple>
+      <span class="drop-icon">🖼️</span>
+      <div class="drop-text">拖曳圖片到這裡，或點擊選擇</div>
+      <div class="drop-sub">支援 PNG / JPG / WEBP，可一次多張</div>
+    </div>
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="card-title">02 分割設定</div>
+    <div class="settings-grid">
+      <div class="field">
+        <label>最大高度 (px)</label>
+        <input type="number" id="maxHeight" value="16000" min="1000" max="16383" step="100">
+        <div class="hint">平台上限 16,383px</div>
+      </div>
+      <div class="field">
+        <label>最大檔案大小 (MB)</label>
+        <input type="number" id="maxMB" value="4.8" min="1" max="5" step="0.1">
+        <div class="hint">平台上限 5MB / 張</div>
+      </div>
+      <div class="field">
+        <label>輸出格式</label>
+        <select id="outFormat">
+          <option value="jpeg">JPG（檔案較小）</option>
+          <option value="png">PNG（畫質較高）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>JPG 畫質</label>
+        <div class="range-row">
+          <input type="range" id="quality" min="60" max="100" value="88">
+          <span class="range-val" id="qualityVal">88</span>
+        </div>
+        <div class="hint">越高畫質越好但檔案越大</div>
+      </div>
+    </div>
+    <div class="field" style="margin-top:16px">
+      <label>智慧偵測靈敏度</label>
+      <div class="range-row">
+        <input type="range" id="gapThresh" min="10" max="60" value="25">
+        <span class="range-val" id="gapVal">25</span>
+      </div>
+      <div class="hint">數值越低，只在非常明顯的空白處切割；越高，在較淡的空白也會切</div>
+    </div>
+    <div class="info-box">
+      🔍 自動分析每一行像素，找出<strong>內容與內容之間的空白區域</strong>，確保文字與圖片不被截斷。
+    </div>
+  </div>
+
+  <!-- Run -->
+  <button class="btn-run" id="runBtn" disabled>
+    ✂️ 開始分割並打包 ZIP
+  </button>
+
+  <!-- Progress -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-log" id="progressLog"></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">03 分割結果</div>
+      <div id="resultList"></div>
+      <a class="btn-dl" id="dlBtn" href="#" download="split_images.zip">
+        ⬇️ 下載 ZIP
+      </a>
+    </div>
+  </div>
+
+  <footer>圖片處理全在瀏覽器本地進行，不上傳至伺服器</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const state = { files: [] };
+
+// ── Elements ───────────────────────────────────────────────────────────────
+const dropZone   = document.getElementById('dropZone');
+const fileInput  = document.getElementById('fileInput');
+const fileList   = document.getElementById('fileList');
+const runBtn     = document.getElementById('runBtn');
+const qualSlider = document.getElementById('quality');
+const qualVal    = document.getElementById('qualityVal');
+const gapSlider  = document.getElementById('gapThresh');
+const gapVal     = document.getElementById('gapVal');
+const progressWrap = document.getElementById('progressWrap');
+const progressFill = document.getElementById('progressFill');
+const progressLog  = document.getElementById('progressLog');
+const resultsDiv   = document.getElementById('results');
+const resultList   = document.getElementById('resultList');
+const dlBtn        = document.getElementById('dlBtn');
+
+// ── Slider live update ─────────────────────────────────────────────────────
+qualSlider.addEventListener('input', () => qualVal.textContent = qualSlider.value);
+gapSlider.addEventListener('input', () => gapVal.textContent = gapSlider.value);
+
+// ── Drag & drop ─────────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  addFiles([...e.dataTransfer.files]);
+});
+fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+
+function addFiles(newFiles) {
+  newFiles.filter(f => f.type.startsWith('image/')).forEach(f => {
+    if (!state.files.find(x => x.name === f.name && x.size === f.size)) state.files.push(f);
+  });
+  renderFileList();
+}
+
+function removeFile(idx) {
+  state.files.splice(idx, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  fileList.innerHTML = '';
+  state.files.forEach((f, i) => {
+    const el = document.createElement('div');
+    el.className = 'file-item';
+    el.innerHTML = `
+      <span>🖼️</span>
+      <span class="fi-name">${f.name}</span>
+      <span class="fi-size">${(f.size/1024/1024).toFixed(2)} MB</span>
+      <button class="fi-remove" onclick="removeFile(${i})">✕</button>
+    `;
+    fileList.appendChild(el);
+  });
+  runBtn.disabled = state.files.length === 0;
+}
+
+// ── Core split logic ────────────────────────────────────────────────────────
+function getImageData(img) {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  // White background for RGBA
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+function findLargeGaps(imageData, threshold, minGap) {
+  const { width, height, data } = imageData;
+  // Background color: compute from corners (assume corners are background)
+  const samples = [
+    [10, 10], [width-10, 10], [10, height-10], [width-10, height-10],
+    [Math.floor(width/2), 5]
+  ];
+  let bgR = 0, bgG = 0, bgB = 0;
+  samples.forEach(([x, y]) => {
+    const i = (y * width + x) * 4;
+    bgR += data[i]; bgG += data[i+1]; bgB += data[i+2];
+  });
+  bgR /= samples.length; bgG /= samples.length; bgB /= samples.length;
+
+  // For each row, compute mean distance from bg color (inner 80%~)
+  const left  = Math.floor(width * 0.08);
+  const right = Math.floor(width * 0.92);
+  const cols  = right - left;
+
+  const rowDist = new Float32Array(height);
+  for (let y = 0; y < height; y++) {
+    let sum = 0;
+    for (let x = left; x < right; x++) {
+      const i = (y * width + x) * 4;
+      sum += (Math.abs(data[i] - bgR) + Math.abs(data[i+1] - bgG) + Math.abs(data[i+2] - bgB)) / 3;
+    }
+    rowDist[y] = sum / cols;
+  }
+
+  // Find contiguous bg-like runs
+  const isBg = rowDist.map(d => d < threshold);
+  const cuts = [];
+  let inRun = false, rs = 0;
+  for (let y = 0; y < height; y++) {
+    if (isBg[y] && !inRun) { inRun = true; rs = y; }
+    else if (!isBg[y] && inRun) {
+      inRun = false;
+      if (y - rs >= minGap) cuts.push(Math.floor((rs + y) / 2));
+    }
+  }
+  if (inRun && height - rs >= minGap) cuts.push(Math.floor((rs + height) / 2));
+  return cuts;
+}
+
+function greedySplit(height, cuts, maxH) {
+  const all = [0, ...cuts, height].sort((a,b) => a-b);
+  const segs = [];
+  let start = 0;
+  while (start < height) {
+    let best = null;
+    for (const c of all) {
+      if (c <= start) continue;
+      if (c - start <= maxH) best = c;
+      else break;
+    }
+    if (best === null) best = start + maxH;
+    segs.push([start, Math.min(best, height)]);
+    start = Math.min(best, height);
+  }
+  return segs;
+}
+
+async function cropToBlob(imageData, y1, y2, format, quality) {
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = y2 - y1;
+  const ctx = canvas.getContext('2d');
+  // Put just the slice
+  const sliceData = new ImageData(
+    new Uint8ClampedArray(imageData.data.buffer,
+      y1 * imageData.width * 4,
+      (y2 - y1) * imageData.width * 4),
+    imageData.width, y2 - y1
+  );
+  ctx.putImageData(sliceData, 0, 0);
+  const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  return new Promise(res => canvas.toBlob(res, mime, quality / 100));
+}
+
+// ── Run ─────────────────────────────────────────────────────────────────────
+function log(msg, cls = '') {
+  const el = document.createElement('div');
+  el.className = 'log-line' + (cls ? ' ' + cls : '');
+  el.textContent = msg;
+  progressLog.appendChild(el);
+  progressLog.scrollTop = progressLog.scrollHeight;
+}
+
+function setProgress(pct) {
+  progressFill.style.width = pct + '%';
+}
+
+runBtn.addEventListener('click', async () => {
+  const maxH   = parseInt(document.getElementById('maxHeight').value) || 16000;
+  const maxMB  = parseFloat(document.getElementById('maxMB').value) || 4.8;
+  const format = document.getElementById('outFormat').value;
+  const qual   = parseInt(qualSlider.value);
+  const thresh = parseInt(gapSlider.value);
+  const minGap = 80; // minimum gap px to consider as section boundary
+
+  runBtn.disabled = true;
+  progressWrap.classList.add('show');
+  resultsDiv.classList.remove('show');
+  progressLog.innerHTML = '';
+  resultList.innerHTML = '';
+  setProgress(0);
+
+  const zip = new JSZip();
+  const resultItems = [];
+  const total = state.files.length;
+
+  for (let fi = 0; fi < total; fi++) {
+    const file = state.files[fi];
+    const baseName = file.name.replace(/\.[^.]+$/, '');
+    log(`📂 處理：${file.name}`);
+
+    // Load image
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    URL.revokeObjectURL(url);
+
+    const imageData = getImageData(img);
+    const h = imageData.height;
+    log(`  尺寸：${imageData.width} × ${h}px`);
+
+    // Find gaps
+    const cuts = findLargeGaps(imageData, thresh, minGap);
+    log(`  找到 ${cuts.length} 個分割候選點`);
+
+    // Greedy split
+    const segs = greedySplit(h, cuts, maxH);
+    log(`  分割成 ${segs.length} 張`);
+
+    // Export each segment
+    for (let si = 0; si < segs.length; si++) {
+      const [y1, y2] = segs[si];
+      let blob = await cropToBlob(imageData, y1, y2, format, qual);
+      let currentQual = qual;
+
+      // Reduce quality if over size limit
+      while (blob.size > maxMB * 1024 * 1024 && currentQual > 60) {
+        currentQual -= 5;
+        blob = await cropToBlob(imageData, y1, y2, format, currentQual);
+      }
+
+      const sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+      const ext = format === 'png' ? 'png' : 'jpg';
+      const fname = `${baseName}_${String(si+1).padStart(2,'0')}.${ext}`;
+      zip.file(fname, blob);
+
+      const ok = blob.size <= maxMB * 1024 * 1024;
+      const cls = ok ? 'ok' : 'warn';
+      log(`  [${si+1}] ${y1}~${y2} (${y2-y1}px) → ${sizeMB}MB${ok ? ' ✓' : ' ⚠ 超出大小'}`, cls);
+
+      resultItems.push({ fname, sizeMB, height: y2-y1, ok, qualUsed: currentQual });
+    }
+
+    setProgress(Math.round((fi+1)/total * 80));
+  }
+
+  log('📦 打包 ZIP...');
+  const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+  const zipUrl = URL.createObjectURL(zipBlob);
+  dlBtn.href = zipUrl;
+  dlBtn.download = 'split_images.zip';
+  setProgress(100);
+  log(`✅ 完成！共 ${resultItems.length} 張，ZIP ${(zipBlob.size/1024/1024).toFixed(1)}MB`, 'ok');
+
+  // Render result list
+  resultItems.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'result-item';
+    el.innerHTML = `
+      <span class="${r.ok ? 'ri-ok' : 'ri-warn'}">${r.ok ? '✓' : '⚠'}</span>
+      <span class="ri-name">${r.fname}</span>
+      <span class="ri-info">${r.height}px · ${r.sizeMB}MB</span>
+    `;
+    resultList.appendChild(el);
+  });
+
+  resultsDiv.classList.add('show');
+  runBtn.disabled = false;
+});
+</script>
+</body>
+</html>
